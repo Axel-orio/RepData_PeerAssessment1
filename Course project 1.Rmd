@@ -1,0 +1,163 @@
+---
+title: "Course project 1"
+author: "Axel González"
+date: "24/3/2021"
+output:
+  html_document:
+    df_print: paged
+  pdf: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Cargando y explorando la información
+```{r cargar}
+Sys.setlocale("LC_ALL", "Spanish_Mexico.1252") # Cambiar locale para prevenir problemas con caracteres especiales
+options(scipen=999) # Prevenir notacion cientifica
+
+#Definimos el directorio
+setwd("~/Coursera/Reproducible research/Course Project 1")
+
+if (!file.exists("data")){
+  dir.create("data")
+}
+
+#Cargamos la base
+if(!file.exists("getdata-projectfiles-UCI HAR Dataset.zip")) {
+  temp <- tempfile()
+  download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp)
+  unzip(temp)
+  unlink(temp)
+}
+
+activity<-read.csv("activity.csv")
+head(activity)
+str(activity)
+
+#Cargamos librerias
+library(dplyr)
+library(pacman)
+library(lubridate)
+p_load(extrafont, ggrepel, ggthemes, janitor, RColorBrewer, scales, tidyverse)
+
+
+#Transformamos la variable date a formato de fecha lubridate
+activity$date<-ymd(activity$date)
+length(unique(activity$date))
+
+
+```
+
+## 1. What is mean number of steps taken per day?
+```{r mean}
+#base provisional para verificar resultados
+prov <- activity %>%
+          group_by(date)%>%
+          summarise(steps=sum(steps))
+
+
+activity %>%
+  group_by(date)%>%
+  summarise(steps=sum(steps))%>%
+  ggplot(aes(x = steps
+              )) +
+  geom_histogram(breaks = seq(0,25000, by=2500), fill = I("cadetblue1"), color = I("aliceblue") )+ 
+  scale_y_continuous(labels = scales::dollar_format(prefix = "")) + 
+  labs(title = "Total de pasos por día", 
+       x = "Total de pasos por día",
+       y = "Número de días")+
+  theme_classic() 
+
+
+ggsave("plot_1.png", path = "./figuras") 
+
+#Calculamos la media
+totalpasos<-aggregate(steps~date, activity, FUN = sum, na.rm = TRUE)
+mean.dia <-  mean(totalpasos$steps)
+mean.dia 
+```
+
+## 2. What is the average daily activity pattern?#
+
+
+```{r pattern}
+prov2 <- activity %>%
+          group_by(interval)%>%
+          summarise(mean.steps=mean(steps, na.rm = TRUE))
+
+
+activity %>%
+  group_by(interval)%>%
+  summarise(mean.steps=mean(steps, na.rm = TRUE))%>%
+  ggplot(aes(x = interval,
+            y = mean.steps)) +
+  geom_line(color = I("cadetblue1"))+ 
+  scale_y_continuous(labels = scales::dollar_format(prefix = "")) + 
+  labs(#title = "Total de pasos por día", 
+       x = "Intervalo",
+       y = "Pasos promedio")+
+  theme_classic() 
+
+ggsave("plot_2.png", path = "./figuras") 
+
+
+```
+
+## 3. Imputing missing values
+
+```{r imputing}
+sum(is.na(activity$steps))
+
+imp_steps <- prov2$mean.steps[match(activity$interval, prov2$interval)]
+activity_imp <- transform(activity, steps = ifelse(is.na(activity$steps), yes = imp_steps, no = activity$steps))
+
+activity_imp %>%
+  group_by(date)%>%
+  summarise(steps=sum(steps))%>%
+  ggplot(aes(x = steps
+  )) +
+  geom_histogram(breaks = seq(0,25000, by=2500), fill = I("cadetblue1"), color = I("aliceblue") )+ 
+  scale_y_continuous(labels = scales::dollar_format(prefix = "")) + 
+  labs(title = "Total de pasos por día", 
+       x = "Total de pasos por día",
+       y = "Número de días")+
+  theme_classic() 
+
+
+ggsave("plot_3.png", path = "./figuras") 
+
+```
+
+## 4. Are there differences in activity patterns between weekdays and weekends?
+
+```{r diferences}
+prov <- activity%>%
+  mutate(weekday = weekdays(date))%>%
+  mutate(daytype = sapply(activity$date, function(x) {
+    if (weekdays(x) == "sábado" | weekdays(x) =="domingo") 
+    {y <- "Weekend"} else 
+    {y <- "Weekday"}
+    y
+  }))
+
+prov%>%
+  group_by(daytype, interval)%>%
+  summarise(mean.steps=mean(steps, na.rm = TRUE))%>%
+  ggplot(aes(x = interval,
+             y = mean.steps,
+             color = daytype)) +
+  geom_line()+ 
+  facet_wrap(~daytype)+
+  scale_y_continuous(labels = scales::dollar_format(prefix = "")) + 
+  labs(#title = "Total de pasos por día", 
+    x = "Intervalo",
+    y = "Pasos promedio")+
+  theme_classic()+ 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave("plot_4.png", path = "./figuras") 
+
+```
